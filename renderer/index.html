@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; script-src 'self'">
+  <title>弹幕发射器</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- 弹幕渲染层 -->
+  <canvas id="danmaku-canvas"></canvas>
+
+  <!-- 窗口边缘提示（鼠标靠近边缘时短暂显示） -->
+  <div class="edge-hint"></div>
+
+  <!-- 调整模式：边界线 + 缩放手柄（仅进入调整模式时显示） -->
+  <div id="resize-frame" class="resize-frame" aria-hidden="true">
+    <div class="resize-line resize-line--top"></div>
+    <div class="resize-line resize-line--bottom"></div>
+    <div class="resize-line resize-line--left"></div>
+    <div class="resize-line resize-line--right"></div>
+    <div class="resize-handle resize-handle--nw" data-resize="nw" title="左上角缩放"></div>
+    <div class="resize-handle resize-handle--n" data-resize="n" title="上边缩放"></div>
+    <div class="resize-handle resize-handle--ne" data-resize="ne" title="右上角缩放"></div>
+    <div class="resize-handle resize-handle--e" data-resize="e" title="右边缩放"></div>
+    <div class="resize-handle resize-handle--se" data-resize="se" title="右下角缩放"></div>
+    <div class="resize-handle resize-handle--s" data-resize="s" title="下边缩放"></div>
+    <div class="resize-handle resize-handle--sw" data-resize="sw" title="左下角缩放"></div>
+    <div class="resize-handle resize-handle--w" data-resize="w" title="左边缩放"></div>
+    <div class="resize-tip">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 3H3v6M15 21h6v-6"/>
+        <path d="M21 3l-7 7M3 21l7-7"/>
+      </svg>
+      拖动边角手柄调整窗口大小，拖动空白处移动窗口
+    </div>
+  </div>
+
+  <!-- 穿透模式提示 -->
+  <div id="passthrough-hint" class="passthrough-hint">点击穿透已开启 · 鼠标移到窗口边缘或按 Ctrl+Alt+T 取消</div>
+
+  <!-- Toast 提示 -->
+  <div id="toast" class="toast"></div>
+
+  <!-- 底部控制条 -->
+  <div id="control-bar" class="control-bar">
+    <button id="btn-play" class="ctl-btn" title="播放 / 暂停（Ctrl+Alt+P）">
+      <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+        <path id="icon-play" d="M8 5v14l11-7z"/>
+        <path id="icon-pause" d="M6 5h4v14H6zM14 5h4v14h-4z" style="display:none"/>
+      </svg>
+    </button>
+
+    <span id="time-display" class="time-display">00:00</span>
+    <span class="time-sep">/</span>
+    <span id="time-total" class="time-display time-display--dim">02:00</span>
+
+    <input id="progress" class="progress" type="range" min="0" max="120" step="0.5" value="0" title="拖动跳转进度">
+
+    <div class="offset-group">
+      <button id="btn-offset-minus" class="ctl-btn ctl-btn--text" title="弹幕提前 100ms">-100</button>
+      <span id="offset-display" class="offset-display">0ms</span>
+      <button id="btn-offset-plus" class="ctl-btn ctl-btn--text" title="弹幕延后 100ms">+100</button>
+    </div>
+
+    <button id="btn-passthrough" class="ctl-btn" title="点击穿透开关（Ctrl+Alt+T）">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="5" width="18" height="14" rx="2.5"/>
+        <circle cx="10" cy="13" r="1.4" fill="currentColor" stroke="none"/>
+        <path d="M13.5 9.5L16 12l-2.5 2.5M16.5 9h1.5M18 10.5V9h1.5" stroke-width="1.8"/>
+      </svg>
+    </button>
+
+    <button id="btn-resize" class="ctl-btn" title="调整窗口大小（拖动边缘手柄）">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <path d="M9 3H3v6M15 21h6v-6"/>
+        <path d="M21 3l-7 7M3 21l7-7"/>
+      </svg>
+    </button>
+
+    <button id="btn-settings" class="ctl-btn" title="设置">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true">
+        <path d="M4 7h16M4 12h16M4 17h16"/>
+        <circle cx="9" cy="7" r="2" fill="rgba(22,26,34,0.9)"/>
+        <circle cx="15" cy="12" r="2" fill="rgba(22,26,34,0.9)"/>
+        <circle cx="7" cy="17" r="2" fill="rgba(22,26,34,0.9)"/>
+      </svg>
+    </button>
+
+    <button id="btn-close" class="ctl-btn ctl-btn--danger" title="退出（Ctrl+Alt+Q）">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+        <path d="M6 6l12 12M18 6L6 18"/>
+      </svg>
+    </button>
+  </div>
+
+  <!-- 设置面板 -->
+  <div id="settings-panel" class="settings-panel">
+    <div class="settings-panel__header">
+      <span class="settings-panel__title">弹幕设置</span>
+      <button id="btn-settings-close" class="ctl-btn ctl-btn--sm" title="关闭">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true">
+          <path d="M6 6l12 12M18 6L6 18"/>
+        </svg>
+      </button>
+    </div>
+    <div id="settings-body" class="settings-panel__body"></div>
+    <div class="settings-panel__footer">
+      <button id="btn-load-file" class="ctl-btn ctl-btn--wide">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M12 3v12M7 10l5 5 5-5"/>
+          <path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>
+        </svg>
+        加载本地弹幕文件
+      </button>
+      <p class="file-hint">支持 JSON 数组 / { "danmaku": [...] }，字段格式见 data/demo.json</p>
+    </div>
+  </div>
+
+  <!-- 本地文件选择（隐藏） -->
+  <input id="file-input" type="file" accept=".json,application/json" style="display:none">
+
+  <script src="danmaku-data.js"></script>
+  <script src="danmaku-engine.js"></script>
+  <script src="renderer.js"></script>
+</body>
+</html>

@@ -1,0 +1,24 @@
+# Dependencies
+/node_modules/
+
+# Build & distribution output
+/dist/
+/dist-pack/
+/release/
+
+# Logs
+*.log
+
+# Temp / scratch files
+_tmp_analyze.js
+
+# Editors & IDE
+/.idea/
+/.vscode/
+/.codebuddy/
+
+# Danmaku datasets (too large for git)
+/data/s*_*/
+/data/*.zip
+/data/**/raw/
+/data/**/danmaku/

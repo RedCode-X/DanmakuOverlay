@@ -1,0 +1,65 @@
+{
+  "name": "danmaku-overlay",
+  "version": "1.2.0",
+  "description": "桌面弹幕发射器：透明悬浮弹幕窗，覆盖在视频播放器上方，手动对齐时间轴，营造边看边刷弹幕的观影体验",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win portable",
+    "dist": "electron-builder --win nsis",
+    "pack:dir": "electron-builder --dir"
+  },
+  "build": {
+    "appId": "com.danmaku.overlay",
+    "productName": "DanmakuOverlay",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "data/**/*",
+      "!data/s5_mzc002005od4txd/raw/**"
+    ],
+    "directories": {
+      "output": "dist"
+    },
+    "win": {
+      "target": [
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ]
+    },
+    "portable": {
+      "artifactName": "DanmakuOverlay-${version}-portable.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "artifactName": "DanmakuOverlay-${version}-setup.${ext}"
+    },
+    "electronDownload": {
+      "mirror": "https://npmmirror.com/mirrors/electron/"
+    }
+  },
+  "keywords": [
+    "danmaku",
+    "electron",
+    "overlay",
+    "视频",
+    "弹幕",
+    "弹幕发射器"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-builder": "^26.15.3",
+    "electron-packager": "^17.1.2"
+  },
+  "dependencies": {
+    "playwright-core": "^1.62.1"
+  }
+}
