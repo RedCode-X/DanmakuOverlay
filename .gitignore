@@ -22,3 +22,12 @@ _tmp_analyze.js
 /data/*.zip
 /data/**/raw/
 /data/**/danmaku/
+/dist_old_20260908_183823/
+/dist_new/
+
+# 临时调试探针脚本（非项目源码，以 _ 或 .probe_ 开头）
+scripts/_*
+scripts/.probe_*/
+
+# 调试过程生成的临时报告
+/_danmaku_fix_report.md

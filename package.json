@@ -1,7 +1,7 @@
 {
   "name": "danmaku-overlay",
   "version": "1.2.0",
-  "description": "桌面弹幕发射器：透明悬浮弹幕窗，覆盖在视频播放器上方，手动对齐时间轴，营造边看边刷弹幕的观影体验",
+  "description": "一站式弹幕观影工具：内置浏览器在线观影 / 本地视频播放，弹幕自动叠加并跟随视频同步；内置腾讯视频弹幕在线采集；兼容原透明置顶外挂悬浮窗模式",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -15,10 +15,14 @@
     "files": [
       "main.js",
       "preload.js",
+      "lib/**/*",
       "renderer/**/*",
       "data/**/*",
-      "!data/s5_mzc002005od4txd/raw/**"
+      "!data/s5_mzc002005od4txd/raw/**",
+      "!data/s6_*",
+      "!data/s5_mzc00200c24ypkp/**"
     ],
+    "electronDist": "node_modules/electron/dist",
     "directories": {
       "output": "dist"
     },
@@ -57,9 +61,7 @@
   "devDependencies": {
     "electron": "^31.7.7",
     "electron-builder": "^26.15.3",
-    "electron-packager": "^17.1.2"
-  },
-  "dependencies": {
+    "electron-packager": "^17.1.2",
     "playwright-core": "^1.62.1"
   }
 }

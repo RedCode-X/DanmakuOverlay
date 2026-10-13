@@ -16,10 +16,19 @@
  *  - 暂停时冻结渲染循环，节省 CPU
  */
 class DanmakuEngine {
-  constructor(canvas) {
+  /**
+   * @param {HTMLCanvasElement} canvas
+   * @param {object} [opts]
+   * @param {boolean} [opts.autoResize=true] 监听 window resize（legacy 悬浮窗）。外部模式传 false
+   * @param {number}   [opts.width]          初始视口宽（CSS px）
+   * @param {number}   [opts.height]         初始视口高（CSS px）
+   */
+  constructor(canvas, opts = {}) {
     this.canvas = canvas;
     this.ctx = canvas.getContext('2d');
     this.dpr = window.devicePixelRatio || 1;
+    this._autoResize = opts.autoResize !== false;
+    this._onWinResize = null;
 
     this.width = 0;
     this.height = 0;
@@ -34,15 +43,17 @@ class DanmakuEngine {
     this.offsetMs = 0;      // 偏移校准（毫秒，负=弹幕提前出现）
     this.playing = false;
     this.lastTs = 0;
+    this.clockSource = null; // 外部时钟源 { isPlaying(), getTime() }，绑定 video 等真实时间源
 
     // ---- 参数 ----
     this.params = {
       fontSize: 26,
       speed: 1.0,
       opacity: 0.9,
-      trackCount: 6,
-      density: 0.8,
-      colorMode: 'original'   // original | white | vibrant
+      trackCount: 5,
+      density: 0.65,
+      colorMode: 'original',  // original | white | vibrant
+      maxActive: 10          // 同屏弹幕数量上限
     };
 
     // ---- 运行状态 ----
@@ -55,27 +66,52 @@ class DanmakuEngine {
 
     // ---- 位图缓存 ----
     this._bitmapCache = new Map();
-    this._bitmapCap = 300;   // 超出后整体清空（弹幕文本不断变化，可接受）
+    this._bitmapCap = 300;   // 位图缓存上限：超出后按 LRU 逐出最久未用项（避免整体清空引起的绘制抖动）
+    this._measureCtx = null; // 共享文本测量上下文（避免每条新弹幕临时创建 canvas）
 
     this.raf = 0;
     this._resizeRaf = 0;
 
-    this.resize();
+    // 初始视口：外部模式由调用方提供宽高；legacy 悬浮窗读取 window 尺寸
+    if (opts.width && opts.height) this.resize(opts.width, opts.height);
+    else if (this._autoResize) this.resize();
     // 窗口变化（调整大小）时合并到下一帧统一处理，避免高频 resize 抖动
-    window.addEventListener('resize', () => {
-      if (this._resizeRaf) return;
-      this._resizeRaf = requestAnimationFrame(() => {
-        this._resizeRaf = 0;
-        this.resize();
-      });
-    });
+    if (this._autoResize) {
+      this._onWinResize = () => {
+        if (this._resizeRaf) return;
+        this._resizeRaf = requestAnimationFrame(() => {
+          this._resizeRaf = 0;
+          this.resize();
+        });
+      };
+      window.addEventListener('resize', this._onWinResize);
+    }
+  }
+
+  /**
+   * 释放引擎：停止渲染循环并解除 window 监听。
+   * 页面桥 / 播放器卸载时调用，避免悬挂的 rAF 与监听器。
+   */
+  destroy() {
+    this.pause();
+    if (this._onWinResize) {
+      window.removeEventListener('resize', this._onWinResize);
+      this._onWinResize = null;
+    }
+    if (this._bitmapCache) this._bitmapCache.clear();
+    this._measureCtx = null;
   }
 
   // ---------------- 尺寸 ----------------
 
-  resize() {
-    const w = window.innerWidth;
-    const h = window.innerHeight;
+  /**
+   * 调整渲染视口尺寸。外部模式可传具体宽高（CSS px），
+   * 不传时回退读取 window（legacy 悬浮窗行为）。
+   */
+  resize(overrideW, overrideH) {
+    const w = Number.isFinite(overrideW) ? Math.round(overrideW) : window.innerWidth;
+    const h = Number.isFinite(overrideH) ? Math.round(overrideH) : window.innerHeight;
+    if (!w || !h) return;
     if (w === this.width && h === this.height) return;
     if (!this.baseWidth) this.baseWidth = w;
     this.width = w;
@@ -91,6 +127,15 @@ class DanmakuEngine {
     this._reflowActive();
   }
 
+  /** 外部视口模式：显式指定弹幕区域宽高（CSS px），等价 resize(w, h) */
+  setViewport(w, h) {
+    this.resize(w, h);
+  }
+
+  getViewport() {
+    return { width: this.width, height: this.height };
+  }
+
   // ---------------- 数据 ----------------
 
   setData(list) {
@@ -103,10 +148,12 @@ class DanmakuEngine {
   // ---------------- 时间轴控制 ----------------
 
   play() {
-    if (this.playing) return;
+    // 已在渲染循环中则忽略（防重复开启）；但若 playing 已为 true 而 rAF 尚未启动
+    // （典型场景：setClockSource 绑定到正在播放的时钟源），需要立即补启循环。
+    if (this.playing && this.raf) return;
     this.playing = true;
     this.lastTs = performance.now();
-    this._loop(this.lastTs);
+    if (!this.raf) this._loop(this.lastTs);
   }
 
   pause() {
@@ -124,14 +171,20 @@ class DanmakuEngine {
 
   seek(time) {
     this.currentTime = Math.max(0, Number(time) || 0);
-    // 定位指针：第一个 time >= 有效时间的弹幕
-    const eff = this._effectiveTime();
+    this._seekPointer(this._effectiveTime());
+  }
+
+  /**
+   * 将发射指针定位到第一个 time >= target 的弹幕，并清屏复位轨道。
+   * 外部时钟模式下发生大幅时间跳变（拖动进度等）时由内部兜底调用。
+   */
+  _seekPointer(target) {
     let lo = 0;
     let hi = this.data.length - 1;
     let idx = this.data.length;
     while (lo <= hi) {
       const mid = (lo + hi) >> 1;
-      if (this.data[mid].time >= eff) {
+      if (this.data[mid].time >= target) {
         idx = mid;
         hi = mid - 1;
       } else {
@@ -141,6 +194,22 @@ class DanmakuEngine {
     this.pointer = idx;
     this._clearActive();
     this._resetTracks();
+  }
+
+  /**
+   * 绑定外部时钟源（{ isPlaying():boolean, getTime():秒 }）。
+   * 绑定后弹幕时间轴完全跟随外部源（如 video 的 currentTime），
+   * 播放 / 暂停 / 拖动均无需手动同步；传 null 恢复自走时钟。
+   */
+  setClockSource(source) {
+    this.clockSource = source || null;
+    if (!this.clockSource) {
+      this.pause();
+      return;
+    }
+    this.playing = Boolean(this.clockSource.isPlaying());
+    if (this.playing) this.play();
+    else this.pause();
   }
 
   getTime() {
@@ -192,6 +261,23 @@ class DanmakuEngine {
     if (dt < 0) dt = 0;
     this.lastTs = ts;
 
+    if (this.clockSource) {
+      // ---- 外部时钟模式：时间完全跟随外部源，play/pause 亦由源决定 ----
+      this.playing = Boolean(this.clockSource.isPlaying());
+      if (!this.playing) return; // 源暂停：冻结循环，等外部再次 play() 唤醒
+      const ext = Number(this.clockSource.getTime()) || 0;
+      const jump = Math.abs(ext - this.currentTime);
+      this.currentTime = ext;
+      // 兜底：拖动/换集造成的大幅跳变（正常 seek 由外部显式 seek() 处理）
+      if (jump > 0.9 && this.data.length) this._seekPointer(this._effectiveTime());
+      this._spawn();
+      this._update(dt);
+      this._render();
+      this.raf = requestAnimationFrame((t) => this._loop(t));
+      return;
+    }
+
+    // ---- 自走时钟模式（legacy 悬浮窗 / 无视频兜底） ----
     this.currentTime += dt;
 
     this._spawn();
@@ -204,23 +290,27 @@ class DanmakuEngine {
   /** 发射到期弹幕（密度概率 + 屏幕数量上限双重控制） */
   _spawn() {
     const eff = this._effectiveTime();
-    const maxPerFrame = 8; // 防瞬时突增
+    const maxPerFrame = 6; // 每帧最多新发条数（含位图预生成，防止单帧尖峰）
     const maxActive = this._maxActive();
     let spawned = 0;
+    // 到期弹幕一律“消费掉”（发射或丢弃），指针持续前进：
+    // 避免屏幕满 / 单帧限额时指针停滞，导致掉帧恢复后过期弹幕集中涌出（二次卡顿与画面时间后滞）
     while (this.pointer < this.data.length && this.data[this.pointer].time <= eff) {
       const dm = this.data[this.pointer];
       this.pointer++;
-      // 密度控制：按 density 概率丢弃
-      if (Math.random() > this.params.density) continue;
-      if (spawned >= maxPerFrame) break;
-      // 屏幕上弹幕已过多时停止发射（后续到期的自动丢弃），保持画面不拥挤
-      if (this.active.length >= maxActive) break;
-      if (this._spawnOne(dm)) spawned++;
+      if (Math.random() > this.params.density) continue;  // 密度概率丢弃
+      if (this.active.length >= maxActive) continue;      // 屏幕已满：丢弃，不积压
+      if (this._spawnOne(dm)) {
+        spawned++;
+        if (spawned >= maxPerFrame) break;
+      }
     }
   }
 
-  /** 屏幕同时可见弹幕上限：随轨道数与密度动态变化 */
+  /** 屏幕同时可见弹幕上限：优先使用用户设置的 maxActive，缺失时回退旧公式 */
   _maxActive() {
+    const limit = Number(this.params.maxActive);
+    if (Number.isFinite(limit) && limit >= 1) return Math.round(limit);
     const scrollCap = Math.round(this.params.trackCount * 2.5);
     const fixedCap = this.topSlots.length + this.bottomSlots.length;
     const base = scrollCap + fixedCap;
@@ -360,9 +450,16 @@ class DanmakuEngine {
     if (!this.active.length) return;
 
     ctx.save();
+    ctx.globalAlpha = this.params.opacity;
+    let curFade = -1;
     for (const dm of this.active) {
       const bmp = dm.bmp || (dm.bmp = this._getBitmap(dm.text, dm.color, dm.fontSize));
-      ctx.globalAlpha = this.params.opacity * (dm.fade ?? 1);
+      // 淡出系数相同（多为 1）时复用 globalAlpha，减少状态切换
+      const fade = dm.fade ?? 1;
+      if (fade !== curFade) {
+        ctx.globalAlpha = this.params.opacity * fade;
+        curFade = fade;
+      }
       // 文字（含描边）已在位图中一次性绘制，这里只做贴图
       ctx.drawImage(bmp.canvas, dm.x, dm.y - bmp.offsetY, bmp.cssW, bmp.cssH);
     }
@@ -373,12 +470,17 @@ class DanmakuEngine {
   _getBitmap(text, color, fontSize) {
     const key = `${fontSize}|${color}|${text}`;
     const hit = this._bitmapCache.get(key);
-    if (hit) return hit;
+    if (hit) {
+      // 命中即刷新 LRU 位置（最近使用放在 Map 末尾）
+      this._bitmapCache.delete(key);
+      this._bitmapCache.set(key, hit);
+      return hit;
+    }
 
     const font = `${fontSize}px "Microsoft YaHei", "PingFang SC", "Segoe UI", sans-serif`;
-    const probe = document.createElement('canvas').getContext('2d');
-    probe.font = font;
-    const textW = probe.measureText(text).width;
+    if (!this._measureCtx) this._measureCtx = document.createElement('canvas').getContext('2d');
+    this._measureCtx.font = font;
+    const textW = this._measureCtx.measureText(text).width;
 
     const pad = Math.ceil(fontSize * 0.4);   // 左右留白，容纳描边
     const cssW = Math.ceil(textW) + pad * 2;
@@ -400,7 +502,11 @@ class DanmakuEngine {
     g.fillText(text, pad, cssH - fontSize * 0.35);
 
     const bmp = { canvas, cssW, cssH, textW, offsetY: cssH - fontSize * 0.35 };
-    if (this._bitmapCache.size >= this._bitmapCap) this._bitmapCache.clear();
+    if (this._bitmapCache.size >= this._bitmapCap) {
+      // LRU 逐出最久未用项（Map 首项）而非整体清空，避免周期性的整体重绘 / GC 尖峰
+      const oldestKey = this._bitmapCache.keys().next().value;
+      if (oldestKey !== undefined) this._bitmapCache.delete(oldestKey);
+    }
     this._bitmapCache.set(key, bmp);
     return bmp;
   }
@@ -450,9 +556,12 @@ class DanmakuEngine {
     this.topSlots = [];
     this.bottomSlots = [];
     const trackCount = Math.max(1, Math.min(this.params.trackCount, 10));
+    // 顶部 / 底部固定弹幕槽位与滚动轨道按比例共享 trackCount
+    // （此前固定槽位数量等于轨道数，滚动+顶部+底部最多 3×trackCount 条，极易铺满全屏）
+    const fixedCount = Math.max(1, Math.min(5, Math.round(trackCount / 2)));
     this._lastScrollTrack = -1;
-    for (let i = 0; i < trackCount; i++) {
-      this.scrollTracks.push(-Infinity);
+    for (let i = 0; i < trackCount; i++) this.scrollTracks.push(-Infinity);
+    for (let i = 0; i < fixedCount; i++) {
       this.topSlots.push(null);
       this.bottomSlots.push(null);
     }

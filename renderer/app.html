@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: http:; connect-src 'self' dm-feed:; media-src 'self' dm-video: blob: data:; font-src 'self' data:;" />
+  <title>弹幕观影</title>
+  <link rel="stylesheet" href="style-app.css" />
+</head>
+<body>
+  <div id="app">
+
+    <!-- ================= 顶部标题栏 ================= -->
+    <header id="titlebar">
+      <div class="tb-section tb-left">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"><i></i><i></i></span>
+          <span class="brand-name">弹幕观影</span>
+          <span class="brand-ver">DM Cinema</span>
+        </div>
+        <nav class="mode-seg" aria-label="观影模式">
+          <button type="button" class="seg-btn active" data-mode="web">
+            <svg viewBox="0 0 24 24"><path d="M4 5.5A1.5 1.5 0 0 1 5.5 4h13A1.5 1.5 0 0 1 20 5.5v13a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M9.8 9l5 3-5 3z" fill="currentColor"/></svg>
+            网页看
+          </button>
+          <button type="button" class="seg-btn" data-mode="local">
+            <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="14" rx="2.2" fill="none" stroke="currentColor" stroke-width="1.6"/><rect x="7" y="8.6" width="5.6" height="6.8" rx="1" fill="currentColor" opacity=".55"/><path d="M14.8 10l4.2 2-4.2 2z" fill="currentColor"/></svg>
+            本地播
+          </button>
+        </nav>
+      </div>
+
+      <div class="tb-section tb-center">
+        <div class="nav-bar">
+          <button id="btn-back" class="icon-btn" title="后退 (Alt+←)" aria-label="后退">
+            <svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="btn-forward" class="icon-btn" title="前进 (Alt+→)" aria-label="前进">
+            <svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button id="btn-refresh" class="icon-btn" title="刷新" aria-label="刷新">
+            <svg viewBox="0 0 24 24"><path d="M20 11A8 8 0 1 0 18.5 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M20 5.5V11h-5.5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <div id="address-wrap">
+            <svg id="addr-lock" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="10.5" width="14" height="9.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 10.5V8a4 4 0 0 1 8 0v2.5" fill="none" stroke="currentColor" stroke-width="1.6"/></svg>
+            <input id="address" type="text" spellcheck="false"
+                   placeholder="输入网址，或搜索想看的内容…  （回车前往，默认站点为你的常用影视页）"
+                   aria-label="地址栏" />
+          </div>
+        </div>
+      </div>
+
+      <div class="tb-section tb-right">
+        <button id="btn-dm-toggle" class="dm-toggle on" title="弹幕总开关 (Ctrl+Alt+D)" aria-label="弹幕开关">
+          <span class="dm-toggle-dot"></span><span class="dm-toggle-label">弹幕</span>
+        </button>
+        <button id="btn-fetch" class="ghost-btn" title="在线采集腾讯弹幕">
+          <svg viewBox="0 0 24 24"><path d="M12 3v12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8 11l4 4 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          采集
+        </button>
+        <button id="btn-sidebar" class="ghost-btn" title="弹幕数据侧栏" aria-label="弹幕数据">
+          <svg viewBox="0 0 24 24"><path d="M4 6.5h16M4 12h16M4 17.5h10" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          数据
+        </button>
+        <button id="btn-settings" class="ghost-btn" title="弹幕设置（字号 / 数量 / 颜色…）" aria-label="设置">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.8v2.6M12 18.6v2.6M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M2.8 12h2.6M18.6 12h2.6M4.9 19.1l1.9-1.9M17.2 6.8l1.9-1.9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          设置
+        </button>
+        <span class="tb-divider"></span>
+        <div class="win-controls">
+          <button id="btn-min" class="win-btn" title="最小化" aria-label="最小化"><svg viewBox="0 0 12 12"><path d="M2 6h8" stroke="currentColor" stroke-width="1.2"/></svg></button>
+          <button id="btn-max" class="win-btn" title="最大化" aria-label="最大化"><svg viewBox="0 0 12 12"><rect x="2" y="2" width="8" height="8" rx="1" fill="none" stroke="currentColor" stroke-width="1.1"/></svg></button>
+          <button id="btn-close" class="win-btn close" title="关闭" aria-label="关闭"><svg viewBox="0 0 12 12"><path d="M2.5 2.5l7 7m0-7l-7 7" stroke="currentColor" stroke-width="1.2"/></svg></button>
+        </div>
+      </div>
+    </header>
+
+    <!-- ================= 中央内容区 ================= -->
+    <div class="content">
+    <main id="stage-wrap">
+      <!-- 网页模式 -->
+      <section id="web-pane" class="mode-pane active">
+        <webview id="guest" partition="persist:dm-web" src="about:blank"></webview>
+        <div id="stage-status" class="stage-status" hidden></div>
+      </section>
+
+      <!-- 本地播放模式 -->
+      <section id="local-pane" class="mode-pane">
+        <div id="local-stage">
+          <video id="local-video" playsinline preload="auto"></video>
+          <canvas id="local-canvas"></canvas>
+          <div id="local-drop" class="drop-hint">
+            <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 15.5v3A2.5 2.5 0 0 0 6.5 21h11a2.5 2.5 0 0 0 2.5-2.5v-3" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <p>把本地视频文件拖到这里，或点击选择文件</p>
+            <p class="sub">打开后弹幕自动叠加并同步时间轴</p>
+          </div>
+          <div id="local-filebar">
+            <span id="local-file-name">未打开视频</span>
+            <span id="local-file-actions">
+              <button id="btn-open-video" class="mini-btn">打开视频</button>
+              <button id="btn-eject" class="mini-btn danger" title="关闭当前视频" hidden>关闭</button>
+            </span>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= 底部弹幕控制浮层（叠加于媒体区之上，不随侧栏偏移） ================= -->
+      <div id="ctlbar" class="ctlbar">
+        <button id="ctl-play" class="ctl-btn play" title="播放/暂停 (Ctrl+Alt+P)" aria-label="播放/暂停">
+          <svg viewBox="0 0 24 24" class="ic-play"><path d="M8 5.6v12.8L19 12z" fill="currentColor"/></svg>
+          <svg viewBox="0 0 24 24" class="ic-pause"><rect x="6.5" y="5" width="3.4" height="14" rx="1" fill="currentColor"/><rect x="14.1" y="5" width="3.4" height="14" rx="1" fill="currentColor"/></svg>
+        </button>
+        <button id="ctl-back5" class="ctl-chip" title="快退 5 秒 (Ctrl+Alt+←)">-5s</button>
+        <span id="ctl-time-cur" class="ctl-time">0:00</span>
+        <input id="ctl-seek" class="ctl-seek" type="range" min="0" max="0" step="1" value="0" aria-label="播放进度" />
+        <span id="ctl-time-total" class="ctl-time dim">0:00</span>
+        <button id="ctl-fwd5" class="ctl-chip" title="快进 5 秒 (Ctrl+Alt+→)">+5s</button>
+        <span class="ctl-divider"></span>
+        <button id="ctl-ms-minus" class="ctl-chip" title="弹幕整体提前 100ms">-100ms</button>
+        <span id="ctl-offset" class="ctl-offset" title="弹幕时间轴偏移量">偏移 0ms</span>
+        <button id="ctl-ms-plus" class="ctl-chip" title="弹幕整体延后 100ms">+100ms</button>
+        <button id="ctl-settings" class="ctl-chip" title="弹幕设置：字号 / 同屏数量 / 颜色等">设置</button>
+        <button id="ctl-full" class="ctl-chip ghost" title="本地播放全屏" hidden>全屏</button>
+      </div>
+    </main>
+
+    <!-- ================= 数据侧栏 ================= -->
+    <aside id="sidebar" class="sidebar">
+      <header class="side-head">
+        <div class="side-title">
+          <svg viewBox="0 0 24 24"><path d="M3.5 6A1.5 1.5 0 0 1 5 4.5h14A1.5 1.5 0 0 1 20.5 6v8A1.5 1.5 0 0 1 19 15.5H5A1.5 1.5 0 0 1 3.5 14z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8.5 4.5V15M12.5 9.5h3M12.5 12.5h3" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+          <span>弹幕数据</span>
+        </div>
+        <button id="btn-side-close" class="icon-btn small" title="收起侧栏" aria-label="收起">✕</button>
+      </header>
+
+      <div class="side-scroll">
+        <!-- 当前数据卡 -->
+        <section id="feed-card" class="feed-card hidden">
+          <div class="feed-card-top">
+            <span class="dot-live"></span>
+            <span id="feed-title" class="feed-title">未加载</span>
+            <span class="flex-sp"></span>
+            <button id="btn-feed-reload" class="mini-btn" title="重载当前弹幕 (Ctrl+Alt+L)">重载</button>
+            <button id="btn-feed-clear" class="mini-btn danger">清空</button>
+          </div>
+          <div id="feed-meta" class="feed-meta"></div>
+        </section>
+
+        <!-- 在线采集 -->
+        <details id="fetch-box" class="panel" open>
+          <summary class="panel-head">
+            <svg viewBox="0 0 24 24"><path d="M12 3v12" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8 11l4 4 4-4" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+            <span>在线采集（腾讯视频弹幕）</span>
+            <span class="badge-new">NEW</span>
+          </summary>
+          <div class="panel-body">
+            <p class="panel-note">边看边采：粘贴腾讯视频播放页链接（或直接填 <b>vid</b>），自动识别并分段抓取弹幕，完成后可直接加载。采集面向腾讯视频官方弹幕接口，请求限速。</p>
+            <div class="row">
+              <input id="fetch-vid" class="text-input" type="text" spellcheck="false"
+                     placeholder="粘贴链接，如 https://v.qq.com/x/cover/…/xxx.html，或直接填 vid" aria-label="vid 或链接" />
+              <button id="btn-scan-vid" class="mini-btn" title="识别 vid（优先解析输入框，其次当前播放地址）">识别</button>
+            </div>
+            <label class="row label-row">
+              <span class="lbl">标题（可选）</span>
+              <input id="fetch-title" class="text-input" type="text" spellcheck="false" placeholder="留空用 vid 命名" />
+            </label>
+            <div class="row gap">
+              <button id="btn-fetch-start" class="primary-btn">
+                <svg viewBox="0 0 24 24"><path d="M8 5.6v12.8L19 12z" fill="currentColor"/></svg>
+                开始采集
+              </button>
+              <button id="btn-fetch-cancel" class="danger-btn" disabled>取消</button>
+            </div>
+            <div id="fetch-progress" class="fetch-progress" hidden>
+              <div class="fetch-progress-bar"><i></i></div>
+              <div id="fetch-progress-text" class="fetch-progress-text">准备中…</div>
+            </div>
+            <div class="collected-head">
+              <span>已采集</span>
+              <button id="btn-show-dir" class="link-btn">打开文件夹</button>
+            </div>
+            <ul id="collected-list" class="item-list"></ul>
+          </div>
+        </details>
+
+        <!-- 内置数据源 -->
+        <details id="builtin-box" class="panel" open>
+          <summary class="panel-head">
+            <svg viewBox="0 0 24 24"><rect x="4" y="3.5" width="16" height="17" rx="2" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 8h8M8 12h8M8 16h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            <span>内置数据</span>
+            <span id="builtin-count" class="badge-sub"></span>
+          </summary>
+          <div class="panel-body">
+            <input id="builtin-search" class="text-input" type="text" spellcheck="false" placeholder="搜索剧集名…（如：第1期）" />
+            <ul id="builtin-list" class="item-list tall"></ul>
+            <button id="btn-open-danmaku" class="ghost-btn block">
+              <svg viewBox="0 0 24 24"><path d="M5 4h14a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M8 12l2.5 2.5L16 9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              从本地加载弹幕 JSON…
+            </button>
+          </div>
+        </details>
+
+        <footer class="side-foot">
+          <p>数据仅供个人学习观影使用 · 弹幕版权归原平台 / 投稿者所有</p>
+          <p>内置数据：五十公里桃花坞 第5季（腾讯视频）</p>
+        </footer>
+      </div>
+    </aside>
+
+    <!-- ================= 设置抽屉 ================= -->
+    <div id="settings-drawer" class="drawer" hidden>
+      <header class="side-head">
+        <div class="side-title">
+          <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2" fill="none" stroke="currentColor" stroke-width="1.7"/><path d="M12 2.8v2.6M12 18.6v2.6M4.9 4.9l1.9 1.9M17.2 17.2l1.9 1.9M2.8 12h2.6M18.6 12h2.6M4.9 19.1l1.9-1.9M17.2 6.8l1.9-1.9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+          <span>弹幕设置</span>
+        </div>
+        <button id="btn-settings-close" class="icon-btn small" title="关闭设置">✕</button>
+      </header>
+      <div class="side-scroll">
+        <div class="set-group">
+          <div class="set-row">
+            <label for="set-size">字号 <output id="out-size">26</output>px</label>
+            <input id="set-size" type="range" min="14" max="64" step="1" />
+          </div>
+          <div class="set-row">
+            <label for="set-speed">滚动速度 <output id="out-speed">1.0</output>x</label>
+            <input id="set-speed" type="range" min="0.5" max="2" step="0.1" />
+          </div>
+          <div class="set-row">
+            <label for="set-opacity">不透明度 <output id="out-opacity">0.9</output></label>
+            <input id="set-opacity" type="range" min="0.15" max="1" step="0.05" />
+          </div>
+          <div class="set-row">
+            <label for="set-max">同屏上限 <output id="out-max">10</output> 条</label>
+            <input id="set-max" type="range" min="4" max="30" step="1" />
+          </div>
+          <div class="set-row">
+            <label for="set-tracks">轨道数 <output id="out-tracks">5</output></label>
+            <input id="set-tracks" type="range" min="2" max="16" step="1" />
+          </div>
+          <div class="set-row">
+            <label for="set-density">密度 <output id="out-density">0.65</output></label>
+            <input id="set-density" type="range" min="0.2" max="1.5" step="0.1" />
+          </div>
+          <div class="set-row column">
+            <span class="lbl">颜色模式</span>
+            <div class="color-seg" id="color-mode">
+              <button type="button" data-mode="original">原色</button>
+              <button type="button" data-mode="white">纯白</button>
+              <button type="button" data-mode="vibrant">多彩</button>
+            </div>
+          </div>
+          <div class="set-row">
+            <label for="set-offset">整体偏移 <output id="out-offset">0</output>ms</label>
+            <input id="set-offset" type="range" min="-5000" max="5000" step="100" />
+          </div>
+        </div>
+        <p class="set-tip">网页模式与本地模式共用此套参数，改动即时生效并自动保存。</p>
+        <div class="set-group legacy-group">
+          <button id="btn-open-legacy" class="ghost-btn block" title="为 PotPlayer / VLC 等外部播放器叠加弹幕">
+            <svg viewBox="0 0 24 24"><path d="M4 8.5h16v10a1.5 1.5 0 0 1-1.5 1.5h-13A1.5 1.5 0 0 1 4 18.5z" fill="none" stroke="currentColor" stroke-width="1.6"/><path d="M2 8.5h20M8.5 8.5V6A1.5 1.5 0 0 1 10 4.5h4A1.5 1.5 0 0 1 15.5 6v2.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+            打开外挂悬浮窗（兼容模式）
+          </button>
+          <p class="set-tip">供 PotPlayer / VLC 等外部播放器场景使用：置顶透明弹幕窗，手动对齐并同步。</p>
+        </div>
+      </div>
+    </div>
+
+    </div><!-- /.content -->
+  </div><!-- /#app -->
+
+  <!-- toast -->
+  <div id="toast" class="toast" hidden></div>
+
+  <script src="danmaku-engine.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

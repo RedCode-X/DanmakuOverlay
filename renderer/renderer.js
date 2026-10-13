@@ -138,6 +138,7 @@
     { key: 'fontSize', label: '字号', min: 16, max: 40, step: 1, unit: 'px', fmt: (v) => `${v}px` },
     { key: 'speed', label: '滚动速度', min: 0.4, max: 2.0, step: 0.1, fmt: (v) => `${v.toFixed(1)}x` },
     { key: 'opacity', label: '透明度', min: 0.1, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
+    { key: 'maxActive', label: '同屏上限', min: 4, max: 30, step: 1, unit: '条', fmt: (v) => `${Math.round(v)} 条` },
     { key: 'trackCount', label: '轨道数', min: 2, max: 10, step: 1, unit: '', fmt: (v) => `${v} 轨` },
     { key: 'density', label: '弹幕密度', min: 0.2, max: 1, step: 0.05, fmt: (v) => `${Math.round(v * 100)}%` },
     { key: 'offsetMs', label: '偏移校准', min: -5000, max: 5000, step: 100, unit: 'ms', fmt: (v) => `${v > 0 ? '+' : ''}${v}ms` }
@@ -415,7 +416,8 @@
       opacity: state.settings.opacity,
       trackCount: state.settings.trackCount,
       density: state.settings.density,
-      colorMode: state.settings.colorMode
+      colorMode: state.settings.colorMode,
+      maxActive: state.settings.maxActive
     });
     engine.setOffset(state.settings.offsetMs);
 
